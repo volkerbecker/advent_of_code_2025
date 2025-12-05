@@ -12,6 +12,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_subdirectory(tools)
 
 # 12 Unterordner einbinden
-foreach(day RANGE 1 3)
+foreach(day RANGE 1 4)
     add_subdirectory(day${day})
 endforeach()
