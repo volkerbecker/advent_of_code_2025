@@ -85,42 +85,32 @@ int main()
 	}
     std::cout << "Number of items in any range: " << count << "\n";
     //Part 2
-	bool something_erased = true;
-    size_t round = 0;
-	while (something_erased)
-	{
-		std::cout << "Merging round " << ++round << "\n";
-		something_erased = false;
-		for (size_t i = 0; i < ranges.size(); ++i)
-		{
-			std::vector<size_t> overlapping_ranges;
-			tools::Range<tools::LongInt256>& result_range = ranges[i];
-			for (size_t j = i + 1; j < ranges.size(); ++j)
-			{
-				auto union_range_opt = result_range.union_with(ranges[j]);
-				//std::cout << "Checking ranges [" << result_range.get_first() << ", " << result_range.get_last() << "] and ["
-				//	<< ranges[j].get_first() << ", " << ranges[j].get_last() << "]\n";
-				if (union_range_opt)
-				{
-					//std::cout << " Merging into [" << union_range_opt->get_first() << ", " << union_range_opt->get_last() << "]\n";
-					result_range = *union_range_opt;
-					overlapping_ranges.push_back(j);
-				}
-			}
-			std::ranges::sort(overlapping_ranges, std::greater<>());
-			for (size_t idx : overlapping_ranges)
-			{
-				something_erased = true;
-				std::swap(ranges[idx], ranges.back());
-				ranges.pop_back();
-			}
-		}
-	}
+	// Replace O(n^2) iterative merge with O(n log n): sort by start, then linear merge
+    std::ranges::sort(ranges, [](const auto& a, const auto& b){ return a.get_first() < b.get_first(); });
+    std::vector<tools::Range<tools::LongInt256>> merged;
+    if (!ranges.empty())
+    {
+        tools::Range<tools::LongInt256> current = ranges.front();
+        for (size_t i = 1; i < ranges.size(); ++i)
+        {
+            auto union_opt = current.union_with(ranges[i]);
+            if (union_opt)
+            {
+                current = *union_opt; // merge into current
+            }
+            else
+            {
+                merged.push_back(current);
+                current = ranges[i];
+            }
+        }
+        merged.push_back(current);
+    }
+    ranges = std::move(merged);
     
 	std::cout << "Number of merged ranges: " << ranges.size() <<  "\n";
     tools::LongInt256 num_of_items = 0;
 	for (const auto& range : ranges){
-		//std::cout << "Range from" << range.get_first() << " to " << range.get_last() << ", Range length: " << range.length() << "\n";
         num_of_items += range.length();
 	}
     std::cout << "Total number of items in all ranges: " << num_of_items << "\n";
