@@ -81,7 +81,7 @@ int main()
 	auto jolt_view_part2 = banks | std::views::transform([](const bank& b) { return get_max_jolt(b, 12); });
 	for (const auto& val : jolt_view_part2)
 		std::cout << val << '\n';
-	LongInt256 total_part2 = std::accumulate(std::ranges::begin(jolt_view_part2), std::ranges::end(jolt_view_part2), LongInt256{0},
+	LongInt256 total_part2 = std::accumulate(std::ranges::begin(jolt_view_part2), std::ranges::end(jolt_view_part2), LongInt256(0),
 		[](const LongInt256& a, const LongInt256& b){ LongInt256 r = a; r += b; return r; });
 	std::cout << "Total Part 2: " << total_part2 << '\n';
 
