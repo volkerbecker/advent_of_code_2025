@@ -136,98 +136,136 @@ bool is_polygon_convex(const std::vector<Point64_t2d>& polygon)
 	return true;
 }
 
-void print_polygon_scaled(const std::vector<Point64_t2d>& polygon, size_t max_width = 100)
+void print_polygon_scaled(const std::vector<Point64_t2d>& polygon, size_t max_width = 100, const std::vector<Point64_t2d>* overlay = nullptr)
 {
-	if (polygon.empty()) {
-		std::cout << "(Empty polygon)\n";
-		return;
-	}
+    const bool has_primary = !polygon.empty();
+    const bool has_overlay = overlay != nullptr && !overlay->empty();
+    if (!has_primary && !has_overlay) {
+        std::cout << "(Empty polygon)\n";
+        return;
+    }
 
-	// Finde Bounding Box
-	int64_t min_x = polygon[0].x();
-	int64_t max_x = polygon[0].x();
-	int64_t min_y = polygon[0].y();
-	int64_t max_y = polygon[0].y();
+    int64_t min_x = 0;
+    int64_t max_x = 0;
+    int64_t min_y = 0;
+    int64_t max_y = 0;
+    bool bounds_initialized = false;
+    auto include_point = [&](const Point64_t2d& p) {
+        if (!bounds_initialized) {
+            min_x = max_x = p.x();
+            min_y = max_y = p.y();
+            bounds_initialized = true;
+            return;
+        }
+        min_x = std::min(min_x, p.x());
+        max_x = std::max(max_x, p.x());
+        min_y = std::min(min_y, p.y());
+        max_y = std::max(max_y, p.y());
+    };
+    auto include_polygon = [&](const std::vector<Point64_t2d>& poly) {
+        for (const auto& p : poly) {
+            include_point(p);
+        }
+    };
 
-	for (const auto& p : polygon) {
-		min_x = std::min(min_x, p.x());
-		max_x = std::max(max_x, p.x());
-		min_y = std::min(min_y, p.y());
-		max_y = std::max(max_y, p.y());
-	}
+    if (has_primary) {
+        include_polygon(polygon);
+    }
+    if (has_overlay) {
+        include_polygon(*overlay);
+    }
 
-	int64_t actual_width = max_x - min_x + 1;
-	int64_t actual_height = max_y - min_y + 1;
+    int64_t actual_width = max_x - min_x + 1;
+    int64_t actual_height = max_y - min_y + 1;
 
-	std::cout << "Polygon bounds: " << actual_width << "x" << actual_height 
-	          << " (from [" << min_x << "," << min_y << "] to [" 
-	          << max_x << "," << max_y << "])\n";
+    std::cout << "Polygon bounds: " << actual_width << "x" << actual_height
+              << " (from [" << min_x << "," << min_y << "] to ["
+              << max_x << "," << max_y << "])\n";
 
-	// Berechne Skalierungsfaktor
-	double scale = 1.0;
-	if (actual_width > static_cast<int64_t>(max_width)) {
-		scale = static_cast<double>(actual_width) / max_width;
-	}
+    double scale = 1.0;
+    if (actual_width > static_cast<int64_t>(max_width)) {
+        scale = static_cast<double>(actual_width) / max_width;
+    }
 
-	size_t output_width = static_cast<size_t>((actual_width + scale - 1) / scale);
-	size_t output_height = static_cast<size_t>((actual_height + scale - 1) / scale);
+    size_t output_width = static_cast<size_t>((actual_width + scale - 1) / scale);
+    size_t output_height = static_cast<size_t>((actual_height + scale - 1) / scale);
 
-	if (scale > 1.0) {
-		std::cout << "Scaling by " << scale << " to fit in " 
-		          << output_width << "x" << output_height << "\n";
-	}
+    if (scale > 1.0) {
+        std::cout << "Scaling by " << scale << " to fit in "
+                  << output_width << "x" << output_height << "\n";
+    }
 
-	// Erstelle Ausgabe-Grid
-	std::vector<std::vector<bool>> grid(output_height, std::vector<bool>(output_width, false));
+    std::vector<std::vector<char>> grid(output_height, std::vector<char>(output_width, '.'));
 
-	// Zeichne Polygon-Linien in das Grid
-	for (size_t i = 0; i < polygon.size(); ++i) {
-		const auto& p1 = polygon[i];
-		const auto& p2 = polygon[(i + 1) % polygon.size()];
+    auto plot = [&](int64_t y, int64_t x, char mark) {
+        if (y < 0 || y >= static_cast<int64_t>(output_height) ||
+            x < 0 || x >= static_cast<int64_t>(output_width)) {
+            return;
+        }
+        char& cell = grid[y][x];
+        if (cell == '.' || cell == mark) {
+            cell = mark;
+        } else {
+            cell = 'X'; // mark overlaps
+        }
+    };
 
-		// Normalisiere und skaliere Koordinaten
-		int64_t x1 = static_cast<int64_t>((p1.x() - min_x) / scale);
-		int64_t y1 = static_cast<int64_t>((p1.y() - min_y) / scale);
-		int64_t x2 = static_cast<int64_t>((p2.x() - min_x) / scale);
-		int64_t y2 = static_cast<int64_t>((p2.y() - min_y) / scale);
+    auto draw_polygon = [&](const std::vector<Point64_t2d>& poly, char mark) {
+        if (poly.empty()) {
+            return;
+        }
+        for (size_t i = 0; i < poly.size(); ++i) {
+            const auto& p1 = poly[i];
+            const auto& p2 = poly[(i + 1) % poly.size()];
 
-		// Bresenham-Algorithmus für Linienzeichnung
-		int64_t dx = std::abs(x2 - x1);
-		int64_t dy = std::abs(y2 - y1);
-		int64_t sx = (x1 < x2) ? 1 : -1;
-		int64_t sy = (y1 < y2) ? 1 : -1;
-		int64_t err = dx - dy;
+            int64_t x1 = static_cast<int64_t>((p1.x() - min_x) / scale);
+            int64_t y1 = static_cast<int64_t>((p1.y() - min_y) / scale);
+            int64_t x2 = static_cast<int64_t>((p2.x() - min_x) / scale);
+            int64_t y2 = static_cast<int64_t>((p2.y() - min_y) / scale);
 
-		int64_t x = x1;
-		int64_t y = y1;
+            int64_t dx = std::abs(x2 - x1);
+            int64_t dy = std::abs(y2 - y1);
+            int64_t sx = (x1 < x2) ? 1 : -1;
+            int64_t sy = (y1 < y2) ? 1 : -1;
+            int64_t err = dx - dy;
 
-		while (true) {
-			if (y >= 0 && y < static_cast<int64_t>(output_height) && 
-			    x >= 0 && x < static_cast<int64_t>(output_width)) {
-				grid[y][x] = true;
-			}
+            int64_t x = x1;
+            int64_t y = y1;
 
-			if (x == x2 && y == y2) break;
+            while (true) {
+                plot(y, x, mark);
 
-			int64_t e2 = 2 * err;
-			if (e2 > -dy) {
-				err -= dy;
-				x += sx;
-			}
-			if (e2 < dx) {
-				err += dx;
-				y += sy;
-			}
-		}
-	}
+                if (x == x2 && y == y2) {
+                    break;
+                }
 
-	// Ausgabe
-	for (size_t y = 0; y < output_height; ++y) {
-		for (size_t x = 0; x < output_width; ++x) {
-			std::cout << (grid[y][x] ? '#' : '.');
-		}
-		std::cout << '\n';
-	}
+                int64_t e2 = 2 * err;
+                if (e2 > -dy) {
+                    err -= dy;
+                    x += sx;
+                }
+                if (e2 < dx) {
+                    err += dx;
+                    y += sy;
+                }
+            }
+        }
+    };
+
+    if (has_primary) {
+        draw_polygon(polygon, '#');
+    }
+    if (has_overlay) {
+        draw_polygon(*overlay, '*');
+        std::cout << "Overlay polygon drawn using '*' (overlaps marked as 'X').\n";
+    }
+
+    for (size_t y = 0; y < output_height; ++y) {
+        for (size_t x = 0; x < output_width; ++x) {
+            std::cout << grid[y][x];
+        }
+        std::cout << '\n';
+    }
 }
 
 void fill_area_in_cahrmatrix(tools::CharMatrix& matrix, const Point64_t2d& startpoint)
@@ -299,9 +337,9 @@ bool is_rectangle_filled(const tools::CharMatrix& matrix, const Point64_t2d& p1,
 	return true;
 }
 
-std::array<Point64_t2d, 4> get_corners(Point64_t2d p1, Point64_t2d p2)
+std::vector<Point64_t2d> get_corners(Point64_t2d p1, Point64_t2d p2)
 {
-	std::array<Point64_t2d, 4> result = {
+	std::vector<Point64_t2d> result = {
 		Point64_t2d(p1.x(), p1.y()),
 		Point64_t2d(p2.x(), p1.y()),
 		Point64_t2d(p2.x(), p2.y()),
@@ -373,6 +411,65 @@ bool line_intersects_polygon_perpendicularly(const std::vector<Point64_t2d>& pol
 	return false;
 }
 
+bool point_on_segment(const Point64_t2d& a, const Point64_t2d& b, const Point64_t2d& p)
+{
+    if (a.x() == b.x()) {
+        if (p.x() != a.x()) {
+            return false;
+        }
+        const int64_t min_y = std::min(a.y(), b.y());
+        const int64_t max_y = std::max(a.y(), b.y());
+        return p.y() >= min_y && p.y() <= max_y;
+    }
+
+    if (a.y() == b.y()) {
+        if (p.y() != a.y()) {
+            return false;
+        }
+        const int64_t min_x = std::min(a.x(), b.x());
+        const int64_t max_x = std::max(a.x(), b.x());
+        return p.x() >= min_x && p.x() <= max_x;
+    }
+
+    const int64_t cross = (b.x() - a.x()) * (p.y() - a.y()) - (b.y() - a.y()) * (p.x() - a.x());
+    if (cross != 0) {
+        return false;
+    }
+
+    const int64_t min_x = std::min(a.x(), b.x());
+    const int64_t max_x = std::max(a.x(), b.x());
+    const int64_t min_y = std::min(a.y(), b.y());
+    const int64_t max_y = std::max(a.y(), b.y());
+    return (p.x() >= min_x && p.x() <= max_x && p.y() >= min_y && p.y() <= max_y);
+}
+
+bool point_in_or_on_polygon(const std::vector<Point64_t2d>& polygon, const Point64_t2d& point)
+{
+    const size_t n = polygon.size();
+    if (n == 0) {
+        return false;
+    }
+    if (n == 1) {
+        return polygon.front().x() == point.x() && polygon.front().y() == point.y();
+    }
+
+    bool inside = false;
+    for (size_t i = 0, j = n - 1; i < n; j = i++) {
+        const auto& a = polygon[j];
+        const auto& b = polygon[i];
+
+        if (point_on_segment(a, b, point)) {
+            return true;
+        }
+
+        const bool crosses_ray = ((a.y() > point.y()) != (b.y() > point.y()));
+        if (crosses_ray && a.x() == b.x() && point.x() < a.x()) {
+            inside = !inside;
+        }
+    }
+    return inside;
+}
+
 int main()
 {
 	auto point64_ts = load_point64_ts("C:/source_code/advent_of_code_2025/day9/input/input.txt");
@@ -400,18 +497,20 @@ int main()
 		Point64_t2d& p1 = *std::ranges::find(point64_ts,current_pair.id1,  &Point64_t2d::get_id);
 		Point64_t2d& p2 = *std::ranges::find(point64_ts, current_pair.id2, &Point64_t2d::get_id);
 		auto corners = get_corners(p1, p2);
+		corners.push_back(corners[0]); // Schliesse den Kreis
 		bool intersects = false;
 		for (size_t i = 1; i < corners.size(); ++i)
 		{
 			auto c1 = corners[i - 1];
 			auto c2 = corners[i];
-			intersects = line_intersects_polygon_perpendicularly(point64_ts, c1, c2);
+			intersects = line_intersects_polygon_perpendicularly(point64_ts, c1, c2) || !point_in_or_on_polygon(point64_ts, c1) || !point_in_or_on_polygon(point64_ts, c2);
 			if (intersects)
 				break;
 		}
 		if (!intersects)
 		{
 			std::cout << "The biggest areas inside the polygon is: " << current_pair.area << "\n";
+			print_polygon_scaled(point64_ts, 200,&corners);
 			break;
 		}
 	}
