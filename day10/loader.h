@@ -22,6 +22,22 @@ struct Configuration
 			curr_state ^= buttons[index];
 		}
 	}
+
+	bool press_button_to_joltage(size_t index)
+	{
+		uint16_t button_mask = buttons[index];
+		for (size_t bit = 0; button_mask > 0; ++bit)
+		{
+			if ((button_mask & 1) == 1)
+			{
+				if(jolts[bit]==0)
+					return false;
+				jolts[bit]--;
+			}
+			button_mask >>= 1;
+		}
+		return true;
+	}
 };
 
 using button_t = std::vector<size_t>;
