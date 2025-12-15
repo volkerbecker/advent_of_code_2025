@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <stdexcept>
 #include <span>
+#include <iostream>
+#include <functional>
 
 namespace tools {
     template<class T>
@@ -76,6 +78,18 @@ namespace tools {
             return last_row;
 		}
 
+        size_t count_elements() const
+			requires std::is_same_v<T, char>
+        {
+            std::optional<size_t> count; 
+            if(!count)
+            {
+                char value = '#';
+                count = std::count(data.begin(), data.end(), value);
+            }
+			return *count;
+		}
+
     private:
         std::vector<T> data{ 0 };
         size_t rows{};
@@ -84,6 +98,38 @@ namespace tools {
     };
 
     using CharMatrix = Matrix<char>;
+
+    inline bool operator < (const CharMatrix& lhs, const CharMatrix& rhs)
+    {
+        if (lhs.num_rows() != rhs.num_rows())
+            return lhs.num_rows() < rhs.num_rows();
+        if (lhs.num_cols() != rhs.num_cols())
+            return lhs.num_cols() < rhs.num_cols();
+        for (size_t r = 0; r < lhs.num_rows(); ++r) {
+            auto row_lhs = lhs.get_row(r);
+            auto row_rhs = rhs.get_row(r);
+            for (size_t c = 0; c < lhs.num_cols(); ++c) {
+                if (row_lhs[c] != row_rhs[c])
+                    return row_lhs[c] < row_rhs[c];
+			}
+        }
+		return false; // equal
+    }
+
+    inline bool operator==(const CharMatrix& lhs, const CharMatrix& rhs)
+    {
+        if (lhs.num_rows() != rhs.num_rows() || lhs.num_cols() != rhs.num_cols())
+            return false;
+        for (size_t r = 0; r < lhs.num_rows(); ++r) {
+            auto row_lhs = lhs.get_row(r);
+            auto row_rhs = rhs.get_row(r);
+            for (size_t c = 0; c < lhs.num_cols(); ++c) {
+                if (row_lhs[c] != row_rhs[c])
+                    return false;
+            }
+        }
+        return true;
+    }
 
     inline CharMatrix read_matrix_from_file(const std::string& filename) {
         std::ifstream is(filename);
@@ -117,7 +163,7 @@ namespace tools {
         return CharMatrix(rows, cols, std::move(flat));
     }
 
-    void print_charmatrix(const CharMatrix& matrix) {
+    inline void print_charmatrix(const CharMatrix& matrix) {
         for (size_t r = 0; r < matrix.num_rows(); ++r) {
             auto row = matrix.get_row(r);
             for (size_t c = 0; c < matrix.num_cols(); ++c) {
@@ -127,7 +173,7 @@ namespace tools {
         }
 	}
 
-    void print_charmatrix_scaled(const CharMatrix& matrix, size_t max_width = 100, char target_char = '#') {
+    inline void print_charmatrix_scaled(const CharMatrix& matrix, size_t max_width = 100, char target_char = '#') {
         if (matrix.num_rows() == 0 || matrix.num_cols() == 0) {
             std::cout << "(Empty matrix)\n";
             return;
@@ -209,4 +255,24 @@ namespace tools {
             std::cout << "\n";
         }
     }
+}
+
+namespace std {
+    template<>
+    struct hash<tools::CharMatrix>
+    {
+        size_t operator()(const tools::CharMatrix& matrix) const noexcept
+        {
+            constexpr size_t mix = 0x9e3779b97f4a7c15ull;
+            size_t seed = matrix.num_rows();
+            seed ^= matrix.num_cols() + mix + (seed << 6) + (seed >> 2);
+            for (size_t r = 0; r < matrix.num_rows(); ++r) {
+                auto row = matrix.get_row(r);
+                for (size_t c = 0; c < matrix.num_cols(); ++c) {
+                    seed ^= static_cast<unsigned char>(row[c]) + mix + (seed << 6) + (seed >> 2);
+                }
+            }
+            return seed;
+        }
+    };
 }
